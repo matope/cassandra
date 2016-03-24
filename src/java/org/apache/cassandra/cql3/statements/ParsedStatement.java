@@ -48,6 +48,7 @@ public abstract class ParsedStatement
 
     public static class Prepared
     {
+        public String rawCQLStatement;
         public final CQLStatement statement;
         public final List<ColumnSpecification> boundNames;
         public final Short[] partitionKeyBindIndexes;
@@ -57,6 +58,7 @@ public abstract class ParsedStatement
             this.statement = statement;
             this.boundNames = boundNames;
             this.partitionKeyBindIndexes = partitionKeyBindIndexes;
+            this.rawCQLStatement = "";
         }
 
         public Prepared(CQLStatement statement, VariableSpecifications names, Short[] partitionKeyBindIndexes)
