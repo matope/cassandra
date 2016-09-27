@@ -27,7 +27,6 @@ import java.util.concurrent.TimeUnit;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
-import com.google.common.primitives.Ints;
 import com.google.common.util.concurrent.RateLimiter;
 
 import org.apache.cassandra.db.Directories;
@@ -202,9 +201,14 @@ public class CompactionTask extends AbstractCompactionTask
 
                         long bytesScanned = scanners.getTotalBytesScanned();
 
-                        //Rate limit the scanners, and account for compression
-                        int lengthRead = (int) (Ints.checkedCast(bytesScanned - lastBytesScanned) * compressionRatio);
-                        limiter.acquire(lengthRead + 1);
+                        // Rate limit the scanners, and account for compression
+                        long lengthRead  = (long)((bytesScanned - lastBytesScanned) * compressionRatio);
+                        while (lengthRead >= Integer.MAX_VALUE){
+                            limiter.acquire(Integer.MAX_VALUE);
+                            lengthRead -= Integer.MAX_VALUE;
+                        }
+                        if (lengthRead > 0)
+                            limiter.acquire((int) lengthRead);
 
                         lastBytesScanned = bytesScanned;
 
