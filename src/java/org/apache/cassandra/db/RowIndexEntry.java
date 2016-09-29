@@ -19,7 +19,6 @@ package org.apache.cassandra.db;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.List;
 
 import com.codahale.metrics.Histogram;
@@ -963,8 +962,6 @@ public class RowIndexEntry<T> implements IMeasurableMemory
 
         IndexInfo fetchIndex(int index) throws IOException
         {
-            assert index >= 0 && index < indexCount;
-
             retrievals++;
 
             // seek to position in "offsets to IndexInfo" table
@@ -998,12 +995,9 @@ public class RowIndexEntry<T> implements IMeasurableMemory
     private abstract static class FileIndexInfoRetriever implements IndexInfoRetriever
     {
         final long indexInfoFilePosition;
-        final int indexCount;
         final ISerializer<IndexInfo> idxInfoSerializer;
         final FileDataInput indexReader;
         int retrievals;
-
-        private IndexInfo[] lastIndexes;
 
         /**
          *
@@ -1015,29 +1009,13 @@ public class RowIndexEntry<T> implements IMeasurableMemory
         FileIndexInfoRetriever(long indexInfoFilePosition, int indexCount, FileDataInput indexReader, ISerializer<IndexInfo> idxInfoSerializer)
         {
             this.indexInfoFilePosition = indexInfoFilePosition;
-            this.indexCount = indexCount;
             this.idxInfoSerializer = idxInfoSerializer;
             this.indexReader = indexReader;
         }
 
         public final IndexInfo columnsIndex(int index) throws IOException
         {
-            if (lastIndexes != null
-                && lastIndexes.length > index && lastIndexes[index] != null)
-            {
-                // return a previously read/deserialized IndexInfo
-                return lastIndexes[index];
-            }
-
-            if (lastIndexes == null)
-                lastIndexes = new IndexInfo[index + 1];
-            else if (lastIndexes.length <= index)
-                lastIndexes = Arrays.copyOf(lastIndexes, index + 1);
-
-            IndexInfo indexInfo = fetchIndex(index);
-            lastIndexes[index] = indexInfo;
-
-            return indexInfo;
+            return fetchIndex(index);
         }
 
         abstract IndexInfo fetchIndex(int index) throws IOException;
