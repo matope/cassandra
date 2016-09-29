@@ -18,6 +18,7 @@
 
 package org.apache.cassandra.io.sstable;
 
+import java.util.Iterator;
 import java.util.concurrent.ThreadLocalRandom;
 
 import org.junit.Ignore;
@@ -26,6 +27,7 @@ import org.junit.runner.RunWith;
 
 import org.apache.cassandra.OrderedJUnit4ClassRunner;
 import org.apache.cassandra.cql3.CQLTester;
+import org.apache.cassandra.cql3.UntypedResultSet;
 import org.apache.cassandra.metrics.CacheMetrics;
 import org.apache.cassandra.service.CacheService;
 
@@ -96,6 +98,9 @@ public class LargePartitionsTest extends CQLTester
         measured("SELECTs 1 for " + name, () -> selects(partitionKBytes, totalKBytes));
 
         measured("SELECTs 2 for " + name, () -> selects(partitionKBytes, totalKBytes));
+
+        CacheService.instance.keyCache.clear();
+        measured("Scan for " + name, () -> scan(partitionKBytes, totalKBytes));
     }
 
     private void selects(long partitionKBytes, long totalKBytes) throws Throwable
@@ -113,6 +118,19 @@ public class LargePartitionsTest extends CQLTester
         keyCacheMetrics("after all selects");
     }
 
+    private void scan(long partitionKBytes, long totalKBytes) throws Throwable
+    {
+            long pk = ThreadLocalRandom.current().nextLong(totalKBytes / partitionKBytes) * partitionKBytes;
+            Iterator<UntypedResultSet.Row> iter = execute("SELECT val FROM %s WHERE pk=?", Long.toBinaryString(pk)).iterator();
+            int i = 0;
+            while (iter.hasNext()) {
+                iter.next();
+                if (i++ % 1000 == 0)
+                    keyCacheMetrics("after " + i + " iteration");
+            }
+            keyCacheMetrics("after all iteration");
+    }
+
     private static void keyCacheMetrics(String title)
     {
         CacheMetrics metrics = CacheService.instance.keyCache.getMetrics();
@@ -123,7 +141,7 @@ public class LargePartitionsTest extends CQLTester
                            " one-min-rate:"+metrics.oneMinuteHitRate.getValue());
     }
 
-    @Test
+    // @Test
     public void prepare() throws Throwable
     {
         for (int i = 0; i < 4; i++)
@@ -132,67 +150,67 @@ public class LargePartitionsTest extends CQLTester
         }
     }
 
-    @Test
+    // @Test
     public void test_01_16k() throws Throwable
     {
         withPartitionSize(16L, 1024L);
     }
 
-    @Test
+    // @Test
     public void test_02_512k() throws Throwable
     {
         withPartitionSize(512L, 1024L);
     }
 
-    @Test
+    // @Test
     public void test_03_1M() throws Throwable
     {
         withPartitionSize(1024L, 1024L);
     }
 
-    @Test
+    // @Test
     public void test_04_4M() throws Throwable
     {
         withPartitionSize(4L * 1024L, 1024L);
     }
 
-    @Test
+    // @Test
     public void test_05_8M() throws Throwable
     {
         withPartitionSize(8L * 1024L, 1024L);
     }
 
-    @Test
+    // @Test
     public void test_06_16M() throws Throwable
     {
         withPartitionSize(16L * 1024L, 1024L);
     }
 
-    @Test
+    // @Test
     public void test_07_32M() throws Throwable
     {
         withPartitionSize(32L * 1024L, 1024L);
     }
 
-    @Test
+    // @Test
     public void test_08_64M() throws Throwable
     {
         withPartitionSize(64L * 1024L, 1024L);
     }
 
-    @Test
+    // @Test
     public void test_09_256M() throws Throwable
     {
         withPartitionSize(256L * 1024L, 4 * 1024L);
     }
 
-    @Test
+    // @Test
     public void test_10_512M() throws Throwable
     {
         withPartitionSize(512L * 1024L, 4 * 1024L);
     }
 
-    @Test
+    // @Test
     public void test_11_1G() throws Throwable
     {
         withPartitionSize(1024L * 1024L, 8 * 1024L);
@@ -204,13 +222,13 @@ public class LargePartitionsTest extends CQLTester
         withPartitionSize(2L * 1024L * 1024L, 8 * 1024L);
     }
 
-    @Test
+    // @Test
     public void test_13_4G() throws Throwable
     {
         withPartitionSize(4L * 1024L * 1024L, 16 * 1024L);
     }
 
-    @Test
+    // @Test
     public void test_14_8G() throws Throwable
     {
         withPartitionSize(8L * 1024L * 1024L, 32 * 1024L);

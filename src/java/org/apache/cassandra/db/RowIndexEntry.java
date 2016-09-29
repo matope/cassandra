@@ -20,9 +20,15 @@ package org.apache.cassandra.db;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.codahale.metrics.Histogram;
+import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap;
+import org.apache.cassandra.cache.ConcurrentLinkedHashCache;
+import org.apache.cassandra.cache.LinkedHashCache;
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.cache.IMeasurableMemory;
 import org.apache.cassandra.config.DatabaseDescriptor;
@@ -40,6 +46,9 @@ import org.apache.cassandra.metrics.MetricNameFactory;
 import org.apache.cassandra.utils.ObjectSizes;
 import org.apache.cassandra.utils.vint.VIntCoding;
 import org.github.jamm.Unmetered;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.apache.cassandra.metrics.CassandraMetricsRegistry.Metrics;
 
@@ -1003,8 +1012,11 @@ public class RowIndexEntry<T> implements IMeasurableMemory
         final FileDataInput indexReader;
         int retrievals;
 
-        private IndexInfo[] lastIndexes;
+        private ConcurrentHashMap<Integer, IndexInfo> lastIndexes;
+        //private IndexInfo[] lastIndexes;
+        //private LinkedHashCache<Integer, IndexInfo> lastIndexes;
 
+        // private static final Logger logger = LoggerFactory.getLogger(FileIndexInfoRetriever.class);
         /**
          *
          * @param indexInfoFilePosition offset of first serialized {@link IndexInfo} object
@@ -1020,6 +1032,16 @@ public class RowIndexEntry<T> implements IMeasurableMemory
             this.indexReader = indexReader;
         }
 
+        /*
+        // columnIndex implementation without cache.
+        public final IndexInfo columnsIndex(int index) throws IOException
+        {
+            return fetchIndex(index);
+        }
+        */
+
+        /*
+        // original columnIndex implementation ( with array )
         public final IndexInfo columnsIndex(int index) throws IOException
         {
             if (lastIndexes != null
@@ -1039,14 +1061,56 @@ public class RowIndexEntry<T> implements IMeasurableMemory
 
             return indexInfo;
         }
+        */
+
+        // columnIndex implementation with ConcurrentHashMap
+        public final IndexInfo columnsIndex(int index) throws IOException
+        {
+            if (lastIndexes == null) {
+                lastIndexes = new ConcurrentHashMap<Integer, IndexInfo>();
+                //logger.debug(String.format("%h:new lastIndexes",this));
+            }
+            IndexInfo lastIndex = lastIndexes.get((Integer)index);
+            if (lastIndex == null){
+                lastIndex = fetchIndex(index);
+                lastIndexes.put((Integer)index, lastIndex);
+                //logger.debug(String.format("%h:columnIndex Cache Miss.( index:%d ) size:%d", this.hashCode(), index, lastIndexes.size()));
+            }else {
+                //logger.debug(String.format("%h:columnIndex Cache Hit.( index:%d ) size:%d", this.hashCode(), index, lastIndexes.size()));
+            }
+            return lastIndex;
+        }
+
+        /*
+        // columnIndex implementation with LinkedHashCache
+        public final IndexInfo columnsIndex(int index) throws IOException
+        {
+            if (lastIndexes == null) {
+                //lastIndexes = new ConcurrentHashMap<Integer, IndexInfo>();
+                lastIndexes = new LinkedHashCache<Integer, IndexInfo>(10, 16, false);
+                //logger.debug(String.format("%h:new lastIndexes",this));
+            }
+            IndexInfo lastIndex = lastIndexes.get((Integer)index);
+            if (lastIndex == null){
+                lastIndex = fetchIndex(index);
+                lastIndexes.put((Integer)index, lastIndex);
+                //logger.debug(String.format("%h:columnIndex Cache Miss.( index:%d ) size:%d", this.hashCode(), index, lastIndexes.size()));
+            }else {
+                //logger.debug(String.format("%h:columnIndex Cache Hit.( index:%d ) size:%d", this.hashCode(), index, lastIndexes.size()));
+            }
+            return lastIndex;
+        }
+        */
 
         abstract IndexInfo fetchIndex(int index) throws IOException;
 
         public void close() throws IOException
         {
+            //logger.debug(String.format("%h close IndexInfo", this.hashCode()));
             indexReader.close();
 
             indexInfoGetsHistogram.update(retrievals);
         }
     }
 }
+
